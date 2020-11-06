@@ -132,6 +132,92 @@ namespace dnc
 	}
 
 	/*
+		class UTF8Analyzer
+	*/
+	class UTF8Analyzer
+	{
+	public:
+		static bool countNextChar(const std::string& utf8_chars, char& target, uint32_t pos);
+		static bool readNextByte(const std::string& utf8_chars, uint32_t pos);
+
+	private:
+		UTF8Analyzer();
+
+		static const uint8_t ASCII_HEADER_MIN;
+		static const uint8_t ASCII_HEADER_MAX;
+		static const uint8_t TWO_BYTES_HEADER_MAX;
+		static const uint8_t THREE_BYTES_HEADER_MAX;
+		static const uint8_t FOUR_BYTES_HEADER_MAX;
+		static const uint8_t NEXT_BYTE_HEADER_MIN;
+		static const uint8_t NEXT_BYTE_HEADER_MAX;
+	};
+
+	const uint8_t UTF8Analyzer::ASCII_HEADER_MIN = 0;
+	const uint8_t UTF8Analyzer::ASCII_HEADER_MAX = 128;
+	const uint8_t UTF8Analyzer::TWO_BYTES_HEADER_MAX = 224;
+	const uint8_t UTF8Analyzer::THREE_BYTES_HEADER_MAX = 240;
+	const uint8_t UTF8Analyzer::FOUR_BYTES_HEADER_MAX = 247;
+	const uint8_t UTF8Analyzer::NEXT_BYTE_HEADER_MIN = 128;
+	const uint8_t UTF8Analyzer::NEXT_BYTE_HEADER_MAX = 192;
+
+	UTF8Analyzer::UTF8Analyzer()
+	{}
+
+	bool UTF8Analyzer::countNextChar(const std::string& utf8_chars, char& target, uint32_t pos)
+	{
+		if(pos >= utf8_chars.size()) return true;
+		
+		uint8_t c = utf8_chars[pos];
+		
+		if(c < ASCII_HEADER_MAX)
+		{
+			target = 1;
+			return true;
+		}
+		else if(c < TWO_BYTES_HEADER_MAX)
+		{
+			++pos;
+			if(!readNextByte(utf8_chars, pos)) return false;
+			target = 2;
+			return true;
+		}
+		else if(c < THREE_BYTES_HEADER_MAX)
+		{
+			for(int j = 0; j < 2; ++j)
+			{
+				++pos;
+				if(!readNextByte(utf8_chars, pos)) return false;
+			}
+			target = 3;
+			return true;
+		}
+		else if(c < FOUR_BYTES_HEADER_MAX)
+		{
+			for(int j = 0; j < 3; ++j)
+			{
+				++pos;
+				if(!readNextByte(utf8_chars, pos)) return false;
+			}
+			target = 4;
+			return true;
+		}
+
+		return false;
+	}
+
+	bool UTF8Analyzer::readNextByte(const std::string& utf8_chars, uint32_t pos)
+	{
+		if(pos >= utf8_chars.size()) return false;
+		
+		if(utf8_chars[pos] >= NEXT_BYTE_HEADER_MIN && utf8_chars[pos] < NEXT_BYTE_HEADER_MAX)
+		{
+			return true;
+		}
+		
+		return false;
+	}
+
+	/*
 		class JSONException
 	*/
 	class JSONException : public std::exception
@@ -322,6 +408,9 @@ namespace dnc
 		JSON& operator=(JSON&& json);
 
 		Type getType() const;
+
+		void parse(const std::string& text);
+		void parseFromFile(const std::string& filename);
 
 		iterator begin();
 		iterator end();
