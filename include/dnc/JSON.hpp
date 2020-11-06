@@ -6,9 +6,30 @@
 #include <string>
 #include <functional>
 #include <sstream>
+#include <fstream>
 
 namespace dnc
 {
+	/*
+		namespace StringUtils
+	*/
+	namespace StringUtils
+	{
+		template<typename T>
+		inline std::string toString(const T& element)
+		{
+			std::stringstream s;
+			s << element;
+			return s.str();
+		}
+
+		template<>
+		inline std::string toString(const std::string& element)
+		{
+			return element;
+		}
+	}
+
 	/*
 		class SequentialMap
 	*/
@@ -137,7 +158,7 @@ namespace dnc
 	class UTF8Analyzer
 	{
 	public:
-		static bool countNextChar(const std::string& utf8_chars, char& target, uint32_t pos);
+		static bool countNextChar(const std::string& utf8_chars, int& target, uint32_t pos);
 		static bool readNextByte(const std::string& utf8_chars, uint32_t pos);
 
 	private:
@@ -163,7 +184,7 @@ namespace dnc
 	UTF8Analyzer::UTF8Analyzer()
 	{}
 
-	bool UTF8Analyzer::countNextChar(const std::string& utf8_chars, char& target, uint32_t pos)
+	bool UTF8Analyzer::countNextChar(const std::string& utf8_chars, int& target, uint32_t pos)
 	{
 		if(pos >= utf8_chars.size()) return true;
 		
@@ -227,10 +248,6 @@ namespace dnc
 		virtual ~JSONException();
 
 		const char* what() const noexcept override;
-		
-	protected:
-		template<typename T>
-		static std::string toString(const T& element);
 
 	private:
 		const char* message;
@@ -248,20 +265,6 @@ namespace dnc
 	const char* JSONException::what() const noexcept
 	{
 		return message;
-	}
-
-	template<typename T>
-	std::string JSONException::toString(const T& element)
-	{
-		std::stringstream s;
-		s << element;
-		return s.str();
-	}
-
-	template<>
-	inline std::string JSONException::toString(const std::string& element)
-	{
-		return element;
 	}
 
 	/*
@@ -327,7 +330,7 @@ namespace dnc
 
 	JSONOutOfRange JSONOutOfRange::Array(uint32_t position) noexcept
 	{
-		return JSONOutOfRange(std::string("La posición " + toString(position) + " se encuentra fuera de los límites del arreglo").c_str());
+		return JSONOutOfRange(std::string("La posición " + StringUtils::toString(position) + " se encuentra fuera de los límites del arreglo").c_str());
 	}
 
 	JSONOutOfRange JSONOutOfRange::Object(const std::string& key) noexcept
@@ -1022,6 +1025,130 @@ namespace dnc
 		--(*this);
 
 		return temp;
+	}
+
+	/*
+		class JSONParseStatus
+	*/
+	class JSONParseStatus
+	{
+	public:
+		JSONParseStatus();
+		JSONParseStatus(std::string&& message);
+		virtual ~JSONParseStatus();
+
+		bool ok() const noexcept;
+		const std::string& what() const noexcept;
+
+	private:
+		bool status;
+		std::string message;
+	};
+
+	JSONParseStatus::JSONParseStatus() :
+		status(true)
+	{}
+
+	JSONParseStatus::JSONParseStatus(std::string&& message) :
+		status(false),
+		message(std::move(message))
+	{}
+
+	JSONParseStatus::~JSONParseStatus()
+	{}
+
+	bool JSONParseStatus::ok() const noexcept
+	{
+		return status;
+	}
+
+	const std::string& JSONParseStatus::what() const noexcept
+	{
+		return message;
+	}
+
+	/*
+		class UnexpectedToken
+	*/
+	class UnexpectedToken : public JSONParseStatus
+	{
+	public:
+		UnexpectedToken(const std::string& token, int row, int col);
+		~UnexpectedToken();
+	};
+
+	UnexpectedToken::UnexpectedToken(const std::string& token, int row, int col) :
+		JSONParseStatus("unexpected token '" + token + "' at position " + StringUtils::toString(row) + ":" + StringUtils::toString(col))
+	{}
+
+	UnexpectedToken::~UnexpectedToken()
+	{}
+
+	/*
+		CannotOpenFile
+	*/
+	class CannotOpenFile : public JSONParseStatus
+	{
+	public:
+		CannotOpenFile(const std::string& filename);
+		~CannotOpenFile();
+	};
+
+	CannotOpenFile::CannotOpenFile(const std::string& filename) :
+		JSONParseStatus("cannot open file " + filename)
+	{}
+
+	CannotOpenFile::~CannotOpenFile()
+	{}
+
+	/*
+		class JSONParser
+	*/
+	class JSONParser
+	{
+	public:
+		static JSONParseStatus parse(const std::string& text, JSON& target);
+		static JSONParseStatus parse(const std::string& text, uint32_t pos, JSON& target);
+		static JSONParseStatus parseFromFile(const std::string& filename, JSON& target);
+
+	private:
+		static const char BRACKET_OPEN;
+		static const char BRACKET_CLOSE;
+		static const char SQUARE_BRACKET_OPEN;
+		static const char SQUARE_BRACKET_CLOSE;
+		static const char QUOTATION_MARK;
+		static const char COMMA;
+		static const char COLON;
+		static const char SEMICOLON;
+
+		JSONParser();
+	};
+
+	const char JSONParser::BRACKET_OPEN = '{';
+	const char JSONParser::BRACKET_CLOSE = '}';
+	const char JSONParser::SQUARE_BRACKET_OPEN = '[';
+	const char JSONParser::SQUARE_BRACKET_CLOSE = ']';
+	const char JSONParser::QUOTATION_MARK = '\"';
+	const char JSONParser::COMMA = ',';
+	const char JSONParser::COLON = ':';
+	const char JSONParser::SEMICOLON = ';';
+
+	JSONParser::JSONParser()
+	{}
+
+	JSONParseStatus JSONParser::parse(const std::string& text, JSON& target)
+	{}
+
+	JSONParseStatus JSONParser::parse(const std::string& text, uint32_t pos, JSON& target)
+	{}
+
+	JSONParseStatus JSONParser::parseFromFile(const std::string& filename, JSON& target)
+	{
+		std::ifstream file(filename);
+		if(!file.is_open())
+		{
+			return CannotOpenFile(filename);
+		}
 	}
 
 	/*
