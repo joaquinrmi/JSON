@@ -1395,6 +1395,7 @@ namespace dnc
 		static const uint8_t COLON;
 		static const uint8_t SEMICOLON;
 		static const uint8_t SCAPE_BAR;
+		static const uint8_t TAB_LETTER;
 
 		JSONParser();
 
@@ -1413,6 +1414,7 @@ namespace dnc
 	const uint8_t JSONParser::COLON = ':';
 	const uint8_t JSONParser::SEMICOLON = ';';
 	const uint8_t JSONParser::SCAPE_BAR = '\\';
+	const uint8_t JSONParser::TAB_LETTER = 't';
 
 	JSONParser::JSONParser()
 	{}
@@ -1508,7 +1510,84 @@ namespace dnc
 
 	JSONParseStatus JSONParser::getJSONString(const std::string& text, uint32_t& pos, JSON& target)
 	{
+		std::string value;
 
+		bool active_scape_bar = false;
+
+		while(true)
+		{
+			int char_count;
+			if(!UTF8Analyzer::countNextChar(text, char_count, pos))
+			{
+				return InvalidUTF8Byte(pos);
+			}
+
+			if(char_count == 1)
+			{
+				uint8_t c = text[pos];
+				pos += 1;
+
+				switch(c)
+				{
+				case QUOTATION_MARK:
+				{
+					if(active_scape_bar)
+					{
+						active_scape_bar = false;
+						value.push_back(c);
+						continue;
+					}
+
+					target = value;
+					break;
+				}
+
+				case SCAPE_BAR:
+				{
+					if(active_scape_bar)
+					{
+						active_scape_bar = false;
+						value.push_back(c);
+						continue;
+					}
+
+					active_scape_bar = true;
+
+					break;
+				}
+
+				default:
+					if(active_scape_bar)
+					{
+						switch(c)
+						{
+						case TAB_LETTER:
+							active_scape_bar = false;
+							value.push_back('\t');
+							continue;
+
+						default:
+							return UnexpectedToken(text.substr(pos - 1, 1), pos - 1);
+						}
+					}
+
+					value.push_back(c);
+					break;
+				}
+
+				continue;
+			}
+
+			if(active_scape_bar)
+			{
+				return UnexpectedToken(text.substr(pos, char_count), pos);
+			}
+
+			value += text.substr(pos, char_count);
+			pos += char_count;
+		}
+
+		return JSONParseStatus();
 	}
 
 	JSONParseStatus JSONParser::getJSONArray(const std::string& text, uint32_t& pos, JSON& target)
