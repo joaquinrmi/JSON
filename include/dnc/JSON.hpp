@@ -6,9 +6,9 @@
 
 #pragma once
 
-#include <iostream>
 #include <cstdlib>
 #include <exception>
+#include <stdexcept>
 #include <vector>
 #include <array>
 #include <string>
@@ -115,7 +115,7 @@ namespace dnc
 			}
 		}
 		
-		throw std::logic_error("");
+		throw std::out_of_range("La clave '" + StringUtils::toString(key) + "' no existe");
 	}
 
 	template<typename KeyT, typename ValT>
@@ -237,8 +237,10 @@ namespace dnc
 	bool UTF8Analyzer::readNextByte(const std::string& utf8_chars, uint32_t pos)
 	{
 		if(pos >= utf8_chars.size()) return false;
+
+		uint8_t c = utf8_chars[pos];
 		
-		if(utf8_chars[pos] >= NEXT_BYTE_HEADER_MIN && utf8_chars[pos] < NEXT_BYTE_HEADER_MAX)
+		if(c >= NEXT_BYTE_HEADER_MIN && c < NEXT_BYTE_HEADER_MAX)
 		{
 			return true;
 		}
@@ -343,7 +345,7 @@ namespace dnc
 
 	JSONOutOfRange JSONOutOfRange::Object(const std::string& key) noexcept
 	{
-		return JSONOutOfRange(std::string("La clave " + key + " no forma parte del objecto").c_str());
+		return JSONOutOfRange(std::string("La clave " + key + " no forma parte del objeto").c_str());
 	}
 
 	JSONOutOfRange::JSONOutOfRange(const char* message) :
@@ -422,6 +424,8 @@ namespace dnc
 
 		void parse(const std::string& text);
 		void parseFromFile(const std::string& filename);
+
+		bool saveToFile(const std::string& filename) const;
 
 		iterator begin();
 		iterator end();
@@ -1517,8 +1521,11 @@ namespace dnc
 		static const uint8_t COMMA;
 		static const uint8_t COLON;
 		static const uint8_t SEMICOLON;
-		static const uint8_t SCAPE_BAR;
+		static const uint8_t HYPHEN;
+		static const uint8_t ESCAPE_BAR;
 		static const uint8_t TAB_LETTER;
+		static const uint8_t RETURN_LETTER;
+		static const uint8_t NEW_LINE_LETTER;
 
 		JSONParser();
 
@@ -1536,8 +1543,11 @@ namespace dnc
 	const uint8_t JSONParser::COMMA = ',';
 	const uint8_t JSONParser::COLON = ':';
 	const uint8_t JSONParser::SEMICOLON = ';';
-	const uint8_t JSONParser::SCAPE_BAR = '\\';
+	const uint8_t JSONParser::HYPHEN = '-';
+	const uint8_t JSONParser::ESCAPE_BAR = '\\';
 	const uint8_t JSONParser::TAB_LETTER = 't';
+	const uint8_t JSONParser::RETURN_LETTER = 'r';
+	const uint8_t JSONParser::NEW_LINE_LETTER = 'n';
 
 	JSONParser::JSONParser()
 	{}
@@ -1565,11 +1575,25 @@ namespace dnc
 
 	JSONParseStatus JSONParser::parseFromFile(const std::string& filename, JSON& target)
 	{
-		std::ifstream file(filename);
+		std::ifstream file(filename, std::ios::binary | std::ios::ate);
 		if(!file.is_open())
 		{
 			return CannotOpenFile(filename);
 		}
+
+		const uint32_t file_size = file.tellg();
+		file.seekg(0);
+
+		std::string text(file_size, ' ');
+		for(uint32_t i = 0; i < file_size; ++i)
+		{
+			char c;
+			file.read(&c, sizeof(char));
+
+			text[i] = c;
+		}
+
+		return parse(text, 0, target);
 	}
 
 	JSONParseStatus JSONParser::getJSONElement(const std::string& text, uint32_t& pos, JSON& target)
@@ -1604,6 +1628,25 @@ namespace dnc
 
 			case QUOTATION_MARK:
 				return getJSONString(text, pos, target);
+
+			case HYPHEN:
+				TextToken ntoken;
+				auto status = UTF8Tokenizator::getToken(text, pos, ntoken);
+				if(!status.ok())
+				{
+					return InvalidUTF8Byte(pos);
+				}
+
+				pos += ntoken.value.size();
+
+				if(ntoken.type == TextToken::NUMBER)
+				{
+					std::string number = token.value + ntoken.value;
+					target = std::atof(number.c_str());
+					return JSONParseStatus();
+				}
+
+				break;
 			}
 
 			return UnexpectedToken(token.value, pos - token.value.size());
@@ -1635,7 +1678,7 @@ namespace dnc
 	{
 		std::string value;
 
-		bool active_scape_bar = false;
+		bool active_escape_bar = false;
 
 		while(true)
 		{
@@ -1654,9 +1697,9 @@ namespace dnc
 				{
 				case QUOTATION_MARK:
 				{
-					if(active_scape_bar)
+					if(active_escape_bar)
 					{
-						active_scape_bar = false;
+						active_escape_bar = false;
 						value.push_back(c);
 						continue;
 					}
@@ -1665,28 +1708,38 @@ namespace dnc
 					return JSONParseStatus();
 				}
 
-				case SCAPE_BAR:
+				case ESCAPE_BAR:
 				{
-					if(active_scape_bar)
+					if(active_escape_bar)
 					{
-						active_scape_bar = false;
+						active_escape_bar = false;
 						value.push_back(c);
 						continue;
 					}
 
-					active_scape_bar = true;
+					active_escape_bar = true;
 
 					break;
 				}
 
 				default:
-					if(active_scape_bar)
+					if(active_escape_bar)
 					{
 						switch(c)
 						{
 						case TAB_LETTER:
-							active_scape_bar = false;
-							value.push_back('\t');
+							active_escape_bar = false;
+							value += "\\t";
+							continue;
+
+						case RETURN_LETTER:
+							active_escape_bar = false;
+							value += "\\r";
+							continue;
+
+						case NEW_LINE_LETTER:
+							active_escape_bar = false;
+							value += "\\n";
 							continue;
 
 						default:
@@ -1701,7 +1754,7 @@ namespace dnc
 				continue;
 			}
 
-			if(active_scape_bar)
+			if(active_escape_bar)
 			{
 				return UnexpectedToken(text.substr(pos, char_count), pos);
 			}
@@ -2118,6 +2171,34 @@ namespace dnc
 		return type;
 	}
 
+	void JSON::parse(const std::string& text)
+	{
+		JSONParser::parse(text, *this);
+	}
+
+	void JSON::parseFromFile(const std::string& filename)
+	{
+		JSONParser::parseFromFile(filename, *this);
+	}
+
+	bool JSON::saveToFile(const std::string& filename) const
+	{
+		std::ofstream file(filename, std::ios::binary);
+		if(!file.is_open())
+		{
+			return false;
+		}
+
+		const std::string text = toString();
+		for(uint32_t i = 0; i < text.size(); ++i)
+		{
+			char c = text[i];
+			file.write(&c, sizeof(char));
+		}
+
+		return true;
+	}
+
 	JSON::iterator JSON::begin()
 	{
 		switch(type)
@@ -2236,7 +2317,14 @@ namespace dnc
 			throw JSONBadType::Array();
 		}
 
-		return *getArray()[position];
+		auto& arr = getArray();
+
+		if(position >= arr.size())
+		{
+			throw JSONOutOfRange::Array(position);
+		}
+
+		return *arr[position];
 	}
 
 	const JSON& JSON::operator[](uint32_t position) const
@@ -2246,7 +2334,14 @@ namespace dnc
 			throw JSONBadType::Array();
 		}
 
-		return *getArray()[position];
+		auto& arr = getArray();
+
+		if(position >= arr.size())
+		{
+			throw JSONOutOfRange::Array(position);
+		}
+
+		return *arr[position];
 	}
 
 	JSON& JSON::operator[](const std::string& key)
@@ -2266,7 +2361,14 @@ namespace dnc
 			throw JSONBadType::Object();
 		}
 
-		return getObject().at(key);
+		auto& obj = getObject();
+		auto found = obj.find(key);
+		if(found == obj.end())
+		{
+			throw JSONOutOfRange::Object(key);
+		}
+
+		return found->second;
 	}
 
 	void JSON::pushBack(const JSON& element)
@@ -2307,10 +2409,12 @@ namespace dnc
 			if(it != obj.end())
 			{
 				result += QM + it->first + QM + ": " + it->second.toString();
+				++it;
 			}
-			for(auto it2 = ++it; it2 != obj.end(); ++it2)
+			while(it != obj.end())
 			{
-				result += ", " + QM + it2->first + QM + ": " + it2->second.toString();
+				result += ", " + QM + it->first + QM + ": " + it->second.toString();
+				++it;
 			}
 
 			result += "}";
