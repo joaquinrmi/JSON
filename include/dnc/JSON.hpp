@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <iostream>
 #include <cstdlib>
 #include <exception>
 #include <vector>
@@ -489,6 +490,128 @@ namespace dnc
 		void forceAddElement(const std::string& key, const JSON& element);
 		void forceAddElement(const std::string& key, JSON&& element);
 	};
+
+	template<typename T>
+	T& JSON::get()
+	{
+		throw JSONBadType("El tipo solicitado no es un tipo fundamental de JSON");
+	}
+
+	template<>
+	inline bool& JSON::get()
+	{
+		if(type != BOOL_TYPE)
+		{
+			throw JSONBadType::Bool();
+		}
+
+		return getBool();
+	}
+
+	template<>
+	inline JSON::number_t& JSON::get()
+	{
+		if(type != NUMBER)
+		{
+			throw JSONBadType::Number();
+		}
+
+		return getNumber();
+	}
+
+	template<>
+	inline std::string& JSON::get()
+	{
+		if(type != STRING)
+		{
+			throw JSONBadType::String();
+		}
+
+		return getString();
+	}
+
+	template<typename T>
+	const T& JSON::get() const
+	{
+		throw JSONBadType("El tipo solicitado es un tipo fundamental de JSON");
+	}
+
+	template<>
+	inline const bool& JSON::get() const
+	{
+		if(type != BOOL_TYPE)
+		{
+			throw JSONBadType::Bool();
+		}
+
+		return getBool();
+	}
+
+	template<>
+	inline const JSON::number_t& JSON::get() const
+	{
+		if(type != NUMBER)
+		{
+			throw JSONBadType::Number();
+		}
+
+		return getNumber();
+	}
+
+	template<>
+	inline const std::string& JSON::get() const
+	{
+		if(type != STRING)
+		{
+			throw JSONBadType::String();
+		}
+
+		return getString();
+	}
+
+	template<typename T>
+	T& JSON::get(uint32_t position)
+	{
+		if(type != ARRAY)
+		{
+			throw JSONBadType::Array();
+		}
+
+		return getArray()[position]->get<T>();
+	}
+
+	template<typename T>
+	const T& JSON::get(uint32_t position) const
+	{
+		if(type != ARRAY)
+		{
+			throw JSONBadType::Array();
+		}
+
+		return getArray()[position]->get<T>();
+	}
+
+	template<typename T>
+	T& JSON::get(const std::string& key)
+	{
+		if(type != OBJECT)
+		{
+			throw JSONBadType::Object();
+		}
+
+		return getObject()[key].get<T>();
+	}
+
+	template<typename T>
+	const T& JSON::get(const std::string& key) const
+	{
+		if(type != OBJECT)
+		{
+			throw JSONBadType::Object();
+		}
+
+		return getObject().at(key).get<T>();
+	}
 
 	class JSON::iterator
 	{
@@ -1608,6 +1731,17 @@ namespace dnc
 				{
 					return InvalidUTF8Byte(pos);
 				}
+				
+				last_pos += token.value.size();
+
+				if(token.type == TextToken::SPACE)
+				{
+					text_status = UTF8Tokenizator::getToken(text, last_pos, token);
+					if(!text_status.ok())
+					{
+						return InvalidUTF8Byte(pos);
+					}
+				}
 
 				if(token.value[0] == SQUARE_BRACKET_CLOSE)
 				{
@@ -1663,6 +1797,17 @@ namespace dnc
 					return InvalidUTF8Byte(pos);
 				}
 
+				last_pos += token.value.size();
+
+				if(token.type == TextToken::SPACE)
+				{
+					text_status = UTF8Tokenizator::getToken(text, last_pos, token);
+					if(!text_status.ok())
+					{
+						return InvalidUTF8Byte(pos);
+					}
+				}
+
 				if(token.value[0] == BRACKET_CLOSE)
 				{
 					++pos;
@@ -1686,7 +1831,7 @@ namespace dnc
 			++pos;
 
 			last_pos = pos;
-			auto status = getJSONElement(text, pos, value);
+			status = getJSONElement(text, pos, value);
 			if(!status.ok())
 			{
 				TextToken token;
@@ -1707,7 +1852,7 @@ namespace dnc
 
 			target[key.get<std::string>()] = std::move(value);
 
-			auto text_status = UTF8Tokenizator::getToken(text, pos, token);
+			text_status = UTF8Tokenizator::getToken(text, pos, token);
 			if(!text_status.ok())
 			{
 				return InvalidUTF8Byte(pos);
@@ -2293,128 +2438,6 @@ namespace dnc
 		}
 
 		getObject().pushBack(key, std::move(element));
-	}
-
-	template<typename T>
-	T& JSON::get()
-	{
-		throw JSONBadType("El tipo solicitado no es un tipo fundamental de JSON");
-	}
-
-	template<>
-	inline bool& JSON::get()
-	{
-		if(type != BOOL_TYPE)
-		{
-			throw JSONBadType::Bool();
-		}
-
-		return getBool();
-	}
-
-	template<>
-	inline JSON::number_t& JSON::get()
-	{
-		if(type != NUMBER)
-		{
-			throw JSONBadType::Number();
-		}
-
-		return getNumber();
-	}
-
-	template<>
-	inline std::string& JSON::get()
-	{
-		if(type != STRING)
-		{
-			throw JSONBadType::String();
-		}
-
-		return getString();
-	}
-
-	template<typename T>
-	const T& JSON::get() const
-	{
-		throw JSONBadType("El tipo solicitado es un tipo fundamental de JSON");
-	}
-
-	template<>
-	inline const bool& JSON::get() const
-	{
-		if(type != BOOL_TYPE)
-		{
-			throw JSONBadType::Bool();
-		}
-
-		return getBool();
-	}
-
-	template<>
-	inline const JSON::number_t& JSON::get() const
-	{
-		if(type != NUMBER)
-		{
-			throw JSONBadType::Number();
-		}
-
-		return getNumber();
-	}
-
-	template<>
-	inline const std::string& JSON::get() const
-	{
-		if(type != STRING)
-		{
-			throw JSONBadType::String();
-		}
-
-		return getString();
-	}
-
-	template<typename T>
-	T& JSON::get(uint32_t position)
-	{
-		if(type != ARRAY)
-		{
-			throw JSONBadType::Array();
-		}
-
-		return getArray()[position]->get<T>();
-	}
-
-	template<typename T>
-	const T& JSON::get(uint32_t position) const
-	{
-		if(type != ARRAY)
-		{
-			throw JSONBadType::Array();
-		}
-
-		return getArray()[position]->get<T>();
-	}
-
-	template<typename T>
-	T& JSON::get(const std::string& key)
-	{
-		if(type != OBJECT)
-		{
-			throw JSONBadType::Object();
-		}
-
-		return getObject()[key].get<T>();
-	}
-
-	template<typename T>
-	const T& JSON::get(const std::string& key) const
-	{
-		if(type != OBJECT)
-		{
-			throw JSONBadType::Object();
-		}
-
-		return getObject().at(key).get<T>();
 	}
 
 	/*
