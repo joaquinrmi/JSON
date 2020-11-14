@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <cstdlib>
 #include <exception>
 #include <vector>
 #include <array>
@@ -440,6 +441,8 @@ namespace dnc
 
 		void pushBack(const JSON& element);
 		void pushBack(JSON&& element);
+
+		std::string toString() const;
 
 		template<typename T>
 		T& get();
@@ -1077,12 +1080,18 @@ namespace dnc
 			NUMBER
 		};
 
+		TextToken();
 		TextToken(Type type, const std::string& value);
 		TextToken(Type type, std::string&& value);
 
 		Type type;
 		std::string value;
 	};
+
+	TextToken::TextToken() :
+		type(SPACE),
+		value("")
+	{}
 
 	TextToken::TextToken(Type type, const std::string& value) :
 		type(type),
@@ -1321,19 +1330,19 @@ namespace dnc
 	class UnexpectedToken : public JSONParseStatus
 	{
 	public:
-		UnexpectedToken(const std::string& token, int row, int col);
+		UnexpectedToken(const std::string& token, int position);
 		~UnexpectedToken();
 	};
 
-	UnexpectedToken::UnexpectedToken(const std::string& token, int row, int col) :
-		JSONParseStatus(std::move("unexpected token '" + token + "' at position " + StringUtils::toString(row) + ":" + StringUtils::toString(col)))
+	UnexpectedToken::UnexpectedToken(const std::string& token, int position) :
+		JSONParseStatus(std::move("unexpected token '" + token + "' at position " + StringUtils::toString(position)))
 	{}
 
 	UnexpectedToken::~UnexpectedToken()
 	{}
 
 	/*
-		CannotOpenFile
+		class CannotOpenFile
 	*/
 	class CannotOpenFile : public JSONParseStatus
 	{
@@ -1347,6 +1356,23 @@ namespace dnc
 	{}
 
 	CannotOpenFile::~CannotOpenFile()
+	{}
+
+	/*
+		class InvalidUTF8Byte
+	*/
+	class InvalidUTF8Byte : public JSONParseStatus
+	{
+	public:
+		InvalidUTF8Byte(int position);
+		~InvalidUTF8Byte();
+	};
+
+	InvalidUTF8Byte::InvalidUTF8Byte(int position) :
+		JSONParseStatus(std::move("utf8 invalid byte at position " + StringUtils::toString(position)))
+	{}
+
+	InvalidUTF8Byte::~InvalidUTF8Byte()
 	{}
 
 	/*
@@ -1368,10 +1394,14 @@ namespace dnc
 		static const uint8_t COMMA;
 		static const uint8_t COLON;
 		static const uint8_t SEMICOLON;
+		static const uint8_t SCAPE_BAR;
 
 		JSONParser();
 
 		static JSONParseStatus getJSONElement(const std::string& text, uint32_t& pos, JSON& target);
+		static JSONParseStatus getJSONString(const std::string& text, uint32_t& pos, JSON& target);
+		static JSONParseStatus getJSONArray(const std::string& text, uint32_t& pos, JSON& target);
+		static JSONParseStatus getJSONObject(const std::string& text, uint32_t& pos, JSON& target);
 	};
 
 	const uint8_t JSONParser::BRACKET_OPEN = '{';
@@ -1382,6 +1412,7 @@ namespace dnc
 	const uint8_t JSONParser::COMMA = ',';
 	const uint8_t JSONParser::COLON = ':';
 	const uint8_t JSONParser::SEMICOLON = ';';
+	const uint8_t JSONParser::SCAPE_BAR = '\\';
 
 	JSONParser::JSONParser()
 	{}
@@ -1403,7 +1434,9 @@ namespace dnc
 	}
 
 	JSONParseStatus JSONParser::parse(const std::string& text, uint32_t pos, JSON& target)
-	{}
+	{
+		return getJSONElement(text, pos, target);
+	}
 
 	JSONParseStatus JSONParser::parseFromFile(const std::string& filename, JSON& target)
 	{
@@ -1415,6 +1448,73 @@ namespace dnc
 	}
 
 	JSONParseStatus JSONParser::getJSONElement(const std::string& text, uint32_t& pos, JSON& target)
+	{
+		TextToken token;
+		auto status = UTF8Tokenizator::getToken(text, pos, token);
+		if(!status.ok())
+		{
+			return InvalidUTF8Byte(pos);
+		}
+
+		pos += token.value.size();
+
+		switch(token.type)
+		{
+		case TextToken::SPACE:
+		{
+			return getJSONElement(text, pos, target);
+		}
+
+		case TextToken::SYMBOL:
+		{
+			uint8_t c = token.value[0];
+
+			switch(c)
+			{
+			case BRACKET_OPEN:
+				return getJSONObject(text, pos, target);
+
+			case SQUARE_BRACKET_OPEN:
+				return getJSONArray(text, pos, target);
+
+			case QUOTATION_MARK:
+				return getJSONString(text, pos, target);
+			}
+
+			return UnexpectedToken(token.value, pos - token.value.size());
+		}
+
+		case TextToken::WORD:
+		{
+			if(token.value == "true")
+			{
+				target = true;
+				return JSONParseStatus();
+			}
+			else if(token.value == "false")
+			{
+				target = false;
+				return JSONParseStatus();
+			}
+
+			return UnexpectedToken(token.value, pos - token.value.size());
+		}
+
+		case TextToken::NUMBER:
+			target = std::atof(token.value.c_str());
+			return JSONParseStatus();
+		}
+	}
+
+	JSONParseStatus JSONParser::getJSONString(const std::string& text, uint32_t& pos, JSON& target)
+	{
+
+	}
+
+	JSONParseStatus JSONParser::getJSONArray(const std::string& text, uint32_t& pos, JSON& target)
+	{}
+
+	JSONParseStatus JSONParser::getJSONObject(const std::string& text, uint32_t& pos, JSON& target)
 	{}
 
 	/*
@@ -1830,6 +1930,79 @@ namespace dnc
 		}
 
 		getArray().push_back(new JSON(std::move(element)));
+	}
+
+	std::string JSON::toString() const
+	{
+		std::string result;
+
+		switch(type)
+		{
+		case OBJECT:
+		{
+			const std::string QM = "\"";
+
+			result += "{";
+
+			auto& obj = getObject();
+
+			auto it = obj.begin();
+			if(it != obj.end())
+			{
+				result += QM + it->first + QM + ": " + it->second.toString();
+			}
+			for(auto it2 = ++it; it2 != obj.end(); ++it2)
+			{
+				result += ", " + QM + it2->first + QM + ": " + it2->second.toString();
+			}
+
+			result += "}";
+			break;
+		}
+
+		case ARRAY:
+		{
+			result += "[";
+
+			auto& arr = getArray();
+			if(arr.size() > 0)
+			{
+				result += arr[0]->toString();
+			}
+			for(uint32_t i = 1; i < arr.size(); ++i)
+			{
+				result += ", " + arr[i]->toString();
+			}
+
+			result += "]";
+			break;
+		}
+
+		case STRING:
+		{
+			result = "\"" + getString() + "\"";
+			break;
+		}
+
+		case NUMBER:
+		{
+			result = StringUtils::toString(getNumber());
+			break;
+		}
+
+		case BOOL_TYPE:
+		{
+			if(getBool()) result = "true";
+			else result = "false";
+			break;
+		}
+
+		case NULL_TYPE:
+			result = "null";
+			break;
+		}
+
+		return result;
 	}
 
 	void JSON::clear()
