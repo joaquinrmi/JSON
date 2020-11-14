@@ -1591,7 +1591,56 @@ namespace dnc
 	}
 
 	JSONParseStatus JSONParser::getJSONArray(const std::string& text, uint32_t& pos, JSON& target)
-	{}
+	{
+		target = JSON::Array();
+
+		while(true)
+		{
+			JSON temp;
+
+			uint32_t last_pos = pos;
+			auto status = getJSONElement(text, pos, temp);
+			if(!status.ok())
+			{
+				TextToken token;
+				auto text_status = UTF8Tokenizator::getToken(text, last_pos, token);
+				if(!text_status.ok())
+				{
+					return InvalidUTF8Byte(pos);
+				}
+
+				if(token.value[0] == SQUARE_BRACKET_CLOSE)
+				{
+					break;
+				}
+
+				return status;
+			}
+
+			target.pushBack(std::move(temp));
+
+			TextToken token;
+			auto text_status = UTF8Tokenizator::getToken(text, pos, token);
+			if(!text_status.ok())
+			{
+				return InvalidUTF8Byte(pos);
+			}
+
+			if(token.value[0] == COMMA)
+			{
+				pos += 1;
+				continue;
+			}
+
+			if(token.value[0] == SQUARE_BRACKET_CLOSE)
+			{
+				pos += 1;
+				break;
+			}
+		}
+
+		return JSONParseStatus();
+	}
 
 	JSONParseStatus JSONParser::getJSONObject(const std::string& text, uint32_t& pos, JSON& target)
 	{}
