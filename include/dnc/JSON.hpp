@@ -194,7 +194,7 @@ namespace dnc
 
 	bool UTF8Analyzer::countNextChar(const std::string& utf8_chars, int& target, uint32_t pos)
 	{
-		if(pos >= utf8_chars.size()) return true;
+		if(pos >= utf8_chars.size()) return false;
 		
 		uint8_t c = utf8_chars[pos];
 		
@@ -1662,7 +1662,7 @@ namespace dnc
 					}
 
 					target = value;
-					break;
+					return JSONParseStatus();
 				}
 
 				case SCAPE_BAR:
@@ -1731,7 +1731,7 @@ namespace dnc
 				{
 					return InvalidUTF8Byte(pos);
 				}
-				
+
 				last_pos += token.value.size();
 
 				if(token.type == TextToken::SPACE)
