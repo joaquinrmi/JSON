@@ -1,5 +1,5 @@
 /*
-	JSON
+	JSON v.1.0
 	Joaquín Ruaimi
 	https://github.com/joaquinrmi/JSON
 */
@@ -581,7 +581,14 @@ namespace dnc
 			throw JSONBadType::Array();
 		}
 
-		return getArray()[position]->get<T>();
+		auto& arr = getArray();
+
+		if(position >= arr.size())
+		{
+			throw JSONOutOfRange::Array(position);
+		}
+
+		return arr[position]->get<T>();
 	}
 
 	template<typename T>
@@ -592,7 +599,14 @@ namespace dnc
 			throw JSONBadType::Array();
 		}
 
-		return getArray()[position]->get<T>();
+		auto& arr = getArray();
+
+		if(position >= arr.size())
+		{
+			throw JSONOutOfRange::Array(position);
+		}
+
+		return arr[position]->get<T>();
 	}
 
 	template<typename T>
@@ -614,7 +628,14 @@ namespace dnc
 			throw JSONBadType::Object();
 		}
 
-		return getObject().at(key).get<T>();
+		auto& obj = getObject();
+		auto found = obj.find(key);
+		if(found == obj.end())
+		{
+			throw JSONOutOfRange::Object(key);
+		}
+
+		return found->second.get<T>();
 	}
 
 	class JSON::iterator
