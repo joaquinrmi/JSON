@@ -1611,6 +1611,7 @@ namespace dnc
 
 				if(token.value[0] == SQUARE_BRACKET_CLOSE)
 				{
+					++pos;
 					break;
 				}
 
@@ -1643,7 +1644,90 @@ namespace dnc
 	}
 
 	JSONParseStatus JSONParser::getJSONObject(const std::string& text, uint32_t& pos, JSON& target)
-	{}
+	{
+		target = JSON::Object();
+
+		while(true)
+		{
+			JSON key;
+			JSON value;
+
+			uint32_t last_pos = pos;
+			auto status = getJSONElement(text, pos, key);
+			if(!status.ok())
+			{
+				TextToken token;
+				auto text_status = UTF8Tokenizator::getToken(text, last_pos, token);
+				if(!text_status.ok())
+				{
+					return InvalidUTF8Byte(pos);
+				}
+
+				if(token.value[0] == BRACKET_CLOSE)
+				{
+					++pos;
+					break;
+				}
+
+				return status;
+			}
+
+			TextToken token;
+			auto text_status = UTF8Tokenizator::getToken(text, pos, token);
+			if(!text_status.ok())
+			{
+				return InvalidUTF8Byte(pos);
+			}
+
+			if(token.value[0] != COLON)
+			{
+				return UnexpectedToken(token.value, pos);
+			}
+			++pos;
+
+			last_pos = pos;
+			auto status = getJSONElement(text, pos, value);
+			if(!status.ok())
+			{
+				TextToken token;
+				auto text_status = UTF8Tokenizator::getToken(text, last_pos, token);
+				if(!text_status.ok())
+				{
+					return InvalidUTF8Byte(pos);
+				}
+
+				if(token.value[0] == BRACKET_CLOSE)
+				{
+					++pos;
+					break;
+				}
+
+				return status;
+			}
+
+			target[key.get<std::string>()] = std::move(value);
+
+			auto text_status = UTF8Tokenizator::getToken(text, pos, token);
+			if(!text_status.ok())
+			{
+				return InvalidUTF8Byte(pos);
+			}
+
+			if(token.value[0] == COMMA)
+			{
+				pos += 1;
+				continue;
+			}
+
+			if(token.value[0] == BRACKET_CLOSE)
+			{
+				pos += 1;
+				break;
+			}
+		}
+
+		return JSONParseStatus();
+	}
 
 	/*
 		class JSON
