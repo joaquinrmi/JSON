@@ -356,6 +356,97 @@ namespace dnc
    {}
 
    /*
+      class JSONParseStatus
+   */
+   class JSONParseStatus
+   {
+   public:
+      JSONParseStatus();
+      JSONParseStatus(std::string&& message);
+      virtual ~JSONParseStatus();
+
+      bool ok() const noexcept;
+      const std::string& what() const noexcept;
+
+   private:
+      bool status;
+      std::string message;
+   };
+
+   JSONParseStatus::JSONParseStatus() :
+      status(true)
+   {}
+
+   JSONParseStatus::JSONParseStatus(std::string&& message) :
+      status(false),
+      message(std::move(message))
+   {}
+
+   JSONParseStatus::~JSONParseStatus()
+   {}
+
+   bool JSONParseStatus::ok() const noexcept
+   {
+      return status;
+   }
+
+   const std::string& JSONParseStatus::what() const noexcept
+   {
+      return message;
+   }
+
+   /*
+      class UnexpectedToken
+   */
+   class UnexpectedToken : public JSONParseStatus
+   {
+   public:
+      UnexpectedToken(const std::string& token, int position);
+      ~UnexpectedToken();
+   };
+
+   UnexpectedToken::UnexpectedToken(const std::string& token, int position) :
+      JSONParseStatus(std::move("unexpected token '" + token + "' at position " + StringUtils::toString(position)))
+   {}
+
+   UnexpectedToken::~UnexpectedToken()
+   {}
+
+   /*
+      class CannotOpenFile
+   */
+   class CannotOpenFile : public JSONParseStatus
+   {
+   public:
+      CannotOpenFile(const std::string& filename);
+      ~CannotOpenFile();
+   };
+
+   CannotOpenFile::CannotOpenFile(const std::string& filename) :
+      JSONParseStatus(std::move("cannot open file " + filename))
+   {}
+
+   CannotOpenFile::~CannotOpenFile()
+   {}
+
+   /*
+      class InvalidUTF8Byte
+   */
+   class InvalidUTF8Byte : public JSONParseStatus
+   {
+   public:
+      InvalidUTF8Byte(int position);
+      ~InvalidUTF8Byte();
+   };
+
+   InvalidUTF8Byte::InvalidUTF8Byte(int position) :
+      JSONParseStatus(std::move("utf8 invalid byte at position " + StringUtils::toString(position)))
+   {}
+
+   InvalidUTF8Byte::~InvalidUTF8Byte()
+   {}
+
+   /*
       class JSON
    */
    class JSON
@@ -421,9 +512,10 @@ namespace dnc
       JSON& operator=(JSON&& json);
 
       Type getType() const;
+      uint32_t size() const;
 
-      void parse(const std::string& text);
-      void parseFromFile(const std::string& filename);
+      JSONParseStatus parse(const std::string& text);
+      JSONParseStatus parseFromFile(const std::string& filename);
 
       bool saveToFile(const std::string& filename) const;
 
@@ -1433,97 +1525,6 @@ namespace dnc
    }
 
    /*
-      class JSONParseStatus
-   */
-   class JSONParseStatus
-   {
-   public:
-      JSONParseStatus();
-      JSONParseStatus(std::string&& message);
-      virtual ~JSONParseStatus();
-
-      bool ok() const noexcept;
-      const std::string& what() const noexcept;
-
-   private:
-      bool status;
-      std::string message;
-   };
-
-   JSONParseStatus::JSONParseStatus() :
-      status(true)
-   {}
-
-   JSONParseStatus::JSONParseStatus(std::string&& message) :
-      status(false),
-      message(std::move(message))
-   {}
-
-   JSONParseStatus::~JSONParseStatus()
-   {}
-
-   bool JSONParseStatus::ok() const noexcept
-   {
-      return status;
-   }
-
-   const std::string& JSONParseStatus::what() const noexcept
-   {
-      return message;
-   }
-
-   /*
-      class UnexpectedToken
-   */
-   class UnexpectedToken : public JSONParseStatus
-   {
-   public:
-      UnexpectedToken(const std::string& token, int position);
-      ~UnexpectedToken();
-   };
-
-   UnexpectedToken::UnexpectedToken(const std::string& token, int position) :
-      JSONParseStatus(std::move("unexpected token '" + token + "' at position " + StringUtils::toString(position)))
-   {}
-
-   UnexpectedToken::~UnexpectedToken()
-   {}
-
-   /*
-      class CannotOpenFile
-   */
-   class CannotOpenFile : public JSONParseStatus
-   {
-   public:
-      CannotOpenFile(const std::string& filename);
-      ~CannotOpenFile();
-   };
-
-   CannotOpenFile::CannotOpenFile(const std::string& filename) :
-      JSONParseStatus(std::move("cannot open file " + filename))
-   {}
-
-   CannotOpenFile::~CannotOpenFile()
-   {}
-
-   /*
-      class InvalidUTF8Byte
-   */
-   class InvalidUTF8Byte : public JSONParseStatus
-   {
-   public:
-      InvalidUTF8Byte(int position);
-      ~InvalidUTF8Byte();
-   };
-
-   InvalidUTF8Byte::InvalidUTF8Byte(int position) :
-      JSONParseStatus(std::move("utf8 invalid byte at position " + StringUtils::toString(position)))
-   {}
-
-   InvalidUTF8Byte::~InvalidUTF8Byte()
-   {}
-
-   /*
       class JSONParser
    */
    class JSONParser
@@ -2192,14 +2193,24 @@ namespace dnc
       return type;
    }
 
-   void JSON::parse(const std::string& text)
+   uint32_t JSON::size() const
    {
-      JSONParser::parse(text, *this);
+      if(type != ARRAY)
+      {
+         throw JSONBadType::Array();
+      }
+
+      return getArray().size();
    }
 
-   void JSON::parseFromFile(const std::string& filename)
+   JSONParseStatus JSON::parse(const std::string& text)
    {
-      JSONParser::parseFromFile(filename, *this);
+      return JSONParser::parse(text, *this);
+   }
+
+   JSONParseStatus JSON::parseFromFile(const std::string& filename)
+   {
+      return JSONParser::parseFromFile(filename, *this);
    }
 
    bool JSON::saveToFile(const std::string& filename) const
