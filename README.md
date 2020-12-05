@@ -1,6 +1,6 @@
 # JSON
 
-Este librería te permitirá manipular archivos y objetos en formato JSON en C++. Es ligera y fácil de usar e instalar: todo el código está contenido en un único archivo de cabecera [`JSON.hpp`](https://github.com/joaquinrmi/JSON/blob/master/include/dnc/JSON.hpp).
+Esta librería te permitirá manipular archivos y objetos en formato JSON en C++. Es ligera y fácil de usar e instalar: todo el código está contenido en un único archivo de cabecera [`JSON.hpp`](https://github.com/joaquinrmi/JSON/blob/master/include/dnc/JSON.hpp).
 
 ## ¿Qué puede hacer?
 
@@ -123,7 +123,7 @@ JSON person;
 person.parse("{\"name\": \"Gabriela\", \"age\": 31}");
 
 //ahora podemos acceder a las propiedades 'name' y 'age' de 'person'
-cout << person["name"].toString(); << endl;
+cout << person["name"].toString() << endl;
 cout << person["age"].toString() << endl;
 //>> "Gabriela"
 //>> 31
