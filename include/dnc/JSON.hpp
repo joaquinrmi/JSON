@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include <vector>
 #include <array>
+#include <map>
 #include <string>
 #include <functional>
 #include <sstream>
@@ -36,128 +37,6 @@ namespace dnc
       {
          return element;
       }
-   }
-
-   /*
-      class SequentialMap
-   */
-   template<typename KeyT, typename ValT>
-   class SequentialMap : public std::vector<std::pair<KeyT, ValT>>
-   {
-   public:
-      typedef std::pair<KeyT, ValT> pair_t;
-      typedef std::vector<pair_t> base_t;
-      
-      SequentialMap();
-      SequentialMap(std::initializer_list<pair_t> init_list);
-      SequentialMap(const SequentialMap<KeyT, ValT>& seq_map);
-      SequentialMap(SequentialMap<KeyT, ValT>&& seq_map);
-      virtual ~SequentialMap();
-
-      ValT& operator[](const KeyT& key);
-      const ValT& at(const KeyT& key) const;
-
-      typename base_t::iterator find(const KeyT& key);
-      typename base_t::const_iterator find(const KeyT& key) const;
-
-      typename base_t::iterator erase(const KeyT& key);
-
-      void pushBack(const KeyT& key, const ValT& value);
-   };
-
-   template<typename KeyT, typename ValT>
-   SequentialMap<KeyT, ValT>::SequentialMap()
-   {}
-
-   template<typename KeyT, typename ValT>
-   SequentialMap<KeyT, ValT>::SequentialMap(std::initializer_list<pair_t> init_list) :
-      base_t(init_list)
-   {}
-
-   template<typename KeyT, typename ValT>
-   SequentialMap<KeyT, ValT>::SequentialMap(const SequentialMap<KeyT, ValT>& seq_map) :
-      base_t(seq_map)
-   {}
-
-   template<typename KeyT, typename ValT>
-   SequentialMap<KeyT, ValT>::SequentialMap(SequentialMap<KeyT, ValT>&& seq_map) :
-      base_t(std::move(seq_map))
-   {}
-
-   template<typename KeyT, typename ValT>
-   SequentialMap<KeyT, ValT>::~SequentialMap()
-   {}
-
-   template<typename KeyT, typename ValT>
-   ValT& SequentialMap<KeyT, ValT>::operator[](const KeyT& key)
-   {
-      for(auto it = base_t::begin(); it != base_t::end(); ++it)
-      {
-         if(it->first == key)
-         {
-            return it->second;
-         }
-      }
-
-      auto& elem = base_t::insert(base_t::end(), std::make_pair(key, std::move(ValT())))->second;
-
-      return elem;
-   }
-
-   template<typename KeyT, typename ValT>
-   const ValT& SequentialMap<KeyT, ValT>::at(const KeyT& key) const
-   {
-      for(auto it = base_t::begin(); it != base_t::end(); ++it)
-      {
-         if(it->first == key)
-         {
-            return it->second;
-         }
-      }
-      
-      throw std::out_of_range("La clave '" + StringUtils::toString(key) + "' no existe");
-   }
-
-   template<typename KeyT, typename ValT>
-   typename SequentialMap<KeyT, ValT>::base_t::iterator SequentialMap<KeyT, ValT>::find(const KeyT& key)
-   {
-      for(auto it = base_t::begin(); it != base_t::end(); ++it)
-      {
-         if(it->first == key)
-         {
-            return it;
-         }
-      }
-
-      return base_t::end();
-   }
-
-   template<typename KeyT, typename ValT>
-   typename SequentialMap<KeyT, ValT>::base_t::const_iterator SequentialMap<KeyT, ValT>::find(const KeyT& key) const
-   {
-      for(auto it = base_t::begin(); it != base_t::end(); ++it)
-      {
-         if(it->first == key)
-         {
-            return it;
-         }
-      }
-
-      return base_t::end();
-   }
-
-   template<typename KeyT, typename ValT>
-   typename SequentialMap<KeyT, ValT>::base_t::iterator SequentialMap<KeyT, ValT>::erase(const KeyT& key)
-   {
-      auto position = find(key);
-
-      return base_t::erase(position);
-   }
-
-   template<typename KeyT, typename ValT>
-   void SequentialMap<KeyT, ValT>::pushBack(const KeyT& key, const ValT& value)
-   {
-      base_t::insert(base_t::end(), std::make_pair(key, value))->second;
    }
 
    /*
@@ -466,7 +345,7 @@ namespace dnc
       typedef double number_t;
       typedef std::string string_t;
       typedef std::vector<JSON*> array_t;
-      typedef SequentialMap<std::string, JSON> object_t;
+      typedef std::map<std::string, JSON> object_t;
 
       class JSONPair
       {
@@ -2320,6 +2199,7 @@ namespace dnc
       switch(position.type)
       {
       case ARRAY:
+      {
          if(type != ARRAY || position == end())
          {
             return end();
@@ -2328,14 +2208,17 @@ namespace dnc
          delete position.json;
 
          return iterator(getArray().erase(position.array_it));
+      }
 
       case OBJECT:
+      {
          if(type != OBJECT || position == end())
          {
             return end();
          }
 
-         return iterator(getObject().erase(position.key()));
+         return iterator(getObject().erase(position.object_it));
+      }
 
       default:
          throw JSONBadType::Object();
@@ -2563,7 +2446,7 @@ namespace dnc
          throw JSONBadType::Object();
       }
 
-      getObject().pushBack(key, element);
+      getObject()[key] = element;
    }
 
    void JSON::forceAddElement(const std::string& key, JSON&& element)
@@ -2573,7 +2456,7 @@ namespace dnc
          throw JSONBadType::Object();
       }
 
-      getObject().pushBack(key, std::move(element));
+      getObject().emplace(key, std::move(element));
    }
 
    /*
